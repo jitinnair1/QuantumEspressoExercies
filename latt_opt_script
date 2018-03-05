@@ -1,0 +1,58 @@
+#!/bin/bash
+# Script to optimize the lattice parameter of Si.
+
+PREFIX='sil'
+
+latt_param='10.1 10.11 10.12 10.13 10.14 10.15 10.16 10.17 10.18 10.19 10.2 10.21 10.22 10.23 10.24 10.25 10.26 10.261 10.262 10.263 10.264 10.265 10.266 10.267 10.268 10.269 10.27 10.28 10.29 10.3' # List of lattice parameters (a).
+
+for latt in $latt_param # Sweep across the 'a' values to find the 'a' corresponding to the lowest total energy of the system.
+do
+   fname="$latt"
+   scf_name="Si.scf.$fname"
+   echo latt_param = $fname
+   mkdir latt_$fname
+   cp Si.pz-vbc.UPF latt_$fname
+   cd latt_$fname
+   # Create the input file Si.scf.in.
+   cat > $scf_name.in << EOF
+ &control
+    calculation='scf'
+    restart_mode='from_scratch',
+    pseudo_dir='./',
+    outdir='./'
+    prefix='$PREFIX',
+ /
+ &system
+    ibrav=2, celldm(1)=$latt, nat=2, ntyp=1,
+    ecutwfc =30
+ /
+ &electrons
+    conv_thr =  1.0d-8
+    mixing_beta = 0.7
+    diagonalization = 'david'
+ /
+
+ATOMIC_SPECIES
+ Si   28.0855   Si.pz-vbc.UPF
+ATOMIC_POSITIONS
+ Si  0.00 0.00 0.00
+ Si  0.25 0.25 0.25
+K_POINTS  {automatic}
+9 9 9 0 0 0
+EOF
+
+   # Running the scf calculation
+   pw.x < $scf_name.in > $scf_name.out
+
+   rm -rf $PREFIX.* # This removes the $PREFIX.save directory
+
+   cd ../ # Go back to the directory from where this script is executed.
+
+   tot_en=`grep "!    total energy" latt_${fname}/${scf_name}.out | awk '{printf "%15.12f\n",$5}'`
+   # The awk command here prints the 5th column from the file. The 5th column corresponds to the total energy value.
+
+   # Write the values of the 'a' and total energy corresponding to that 'a' into the file en_conv.
+   # The >> symbols indicates that the data in each run must be appended to the same file and not overwrite the file.
+   echo "$latt $tot_en" >> en_conv
+
+done # latt
